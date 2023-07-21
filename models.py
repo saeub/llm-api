@@ -104,6 +104,7 @@ class Llama2(_TransformersModel):
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
+            use_auth_token=True,
             torch_dtype=torch.float16,
             device_map="auto",
         )
