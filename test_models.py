@@ -24,12 +24,16 @@ class MockModel:
 def mock_transformers(monkeypatch):
     def mock_tokenizer_from_pretrained(*args, **kwargs):
         return MockTokenizer()
-    
+
     def mock_model_from_pretrained(*args, **kwargs):
         return MockModel()
 
-    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", mock_tokenizer_from_pretrained)
-    monkeypatch.setattr("transformers.AutoModelForCausalLM.from_pretrained", mock_model_from_pretrained)
+    monkeypatch.setattr(
+        "transformers.AutoTokenizer.from_pretrained", mock_tokenizer_from_pretrained
+    )
+    monkeypatch.setattr(
+        "transformers.AutoModelForCausalLM.from_pretrained", mock_model_from_pretrained
+    )
 
 
 def test_falcon(mock_transformers):
@@ -43,8 +47,11 @@ def test_falcon_instruct(mock_transformers):
     from models import FalconInstruct
 
     model = FalconInstruct("70b")
-    assert model._build_prompt("instructions", "message") == "instructions\nUser: message\nAssistant:"
-    assert model.respond("instructions", "message", max_tokens=10) == "decoded"
+    assert (
+        model._build_prompt("instructions", "message")
+        == "instructions\nUser: message\nAssistant:"
+    )
+    assert model.chat("instructions", "message", max_tokens=10) == "decoded"
     assert model.generate("prompt", max_tokens=10) == "decoded"
 
 
@@ -59,6 +66,9 @@ def test_llama2_chat(mock_transformers):
     from models import Llama2Chat
 
     model = Llama2Chat("70b")
-    assert model._build_prompt("instruction", "message") == "[INST] <<SYS>>\ninstruction\n<</SYS>>\n\nmessage [/INST]"
-    assert model.respond("instruction", "message", max_tokens=10) == "decoded"
+    assert (
+        model._build_prompt("instructions", "message")
+        == "[INST] <<SYS>>\ninstructions\n<</SYS>>\n\nmessage [/INST]"
+    )
+    assert model.chat("instructions", "message", max_tokens=10) == "decoded"
     assert model.generate("prompt", max_tokens=10) == "decoded"

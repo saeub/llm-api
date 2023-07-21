@@ -26,17 +26,21 @@ class Model:
         raise NotImplementedError()
 
 
-class _ChatModel(Model):
-    def respond(
+class ChatModel(Model):
+    _end_of_response: str | None = None
+
+    def chat(
         self,
-        instruction: str,
+        instructions: str,
         message: str,
         **kwargs,
     ) -> str:
-        prompt = self._build_prompt(instruction, message)
+        prompt = self._build_prompt(instructions, message)
+        if "stop_at" not in kwargs:
+            kwargs["stop_at"] = self._end_of_response
         return self.generate(prompt, **kwargs)
 
-    def _build_prompt(self, instruction: str, message: str) -> str:
+    def _build_prompt(self, instructions: str, message: str) -> str:
         raise NotImplementedError()
 
 
@@ -49,7 +53,7 @@ class _StopPhraseCriteria(StoppingCriteria):
         self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs
     ) -> bool:
         decoded = self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
-        return decoded.endswith(self.stop_phrase)
+        return decoded.rstrip().endswith(self.stop_phrase.rstrip())
 
 
 class _TransformersModel(Model):
@@ -60,7 +64,7 @@ class _TransformersModel(Model):
     def generate(
         self,
         prompt: str,
-        max_tokens: int | None = None,
+        max_tokens: int | None = 100,
         stop_at: str | None = None,
         **kwargs,
     ) -> str:
@@ -108,7 +112,9 @@ class Falcon(_TransformersModel):
         super().__init__(tokenizer, model)
 
 
-class FalconInstruct(_TransformersModel, _ChatModel):
+class FalconInstruct(_TransformersModel, ChatModel):
+    _end_of_response = "\nUser:"
+
     def __init__(self, size: Literal["7b", "40b"]):
         model_name = f"tiiuae/falcon-{size}-instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -120,9 +126,9 @@ class FalconInstruct(_TransformersModel, _ChatModel):
         )
         super().__init__(tokenizer, model)
 
-    def _build_prompt(self, instruction: str, message: str) -> str:
+    def _build_prompt(self, instructions: str, message: str) -> str:
         # See https://huggingface.co/spaces/tiiuae/falcon-chat/blob/690a964f3c807fa1fc9acacef4f3d320fdbb6b0f/app.py#L41-L48
-        return f"{instruction}\nUser: {message}\nAssistant:"
+        return f"{instructions}\nUser: {message}\nAssistant:"
 
 
 class Llama2(_TransformersModel):
@@ -138,7 +144,12 @@ class Llama2(_TransformersModel):
         super().__init__(tokenizer, model)
 
 
-class Llama2Chat(_TransformersModel, _ChatModel):
+class Llama2Chat(_TransformersModel, ChatModel):
+    # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L44-L45
+    B_INST, E_INST = "[INST]", "[/INST]"
+    B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+    _end_of_response = B_INST
+
     def __init__(self, size: Literal["7b", "13b", "70b"]):
         model_name = f"meta-llama/Llama-2-{size}-chat-hf"
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=True)
@@ -150,11 +161,9 @@ class Llama2Chat(_TransformersModel, _ChatModel):
         )
         super().__init__(tokenizer, model)
 
-    def _build_prompt(self, instruction: str, message: str) -> str:
-        # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L44-L45
-        B_INST, E_INST = "[INST]", "[/INST]"
-        B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-        return f"{B_INST} {B_SYS}{instruction}{E_SYS}{message} {E_INST}"
+    def _build_prompt(self, instructions: str, message: str) -> str:
+        # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L224-L269
+        return f"{self.B_INST} {self.B_SYS}{instructions}{self.E_SYS}{message} {self.E_INST}"
 
 
 def _get_subclasses(cls):
@@ -165,8 +174,8 @@ def _get_subclasses(cls):
     return subclasses
 
 
-MODEL_CLASSES = {
+MODEL_CLASSES: dict[str, type[Model]] = {
     subclass.__name__.lower(): subclass
     for subclass in _get_subclasses(Model)
-    if not subclass.__name__.startswith("_")
+    if not subclass.__name__.startswith("_") and subclass is not ChatModel
 }

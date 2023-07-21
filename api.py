@@ -4,10 +4,11 @@ from ast import literal_eval
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 import models
+
 
 def kwarg_eval(string: str) -> tuple[str, Any]:
     key, value = string.split("=")
@@ -16,6 +17,7 @@ def kwarg_eval(string: str) -> tuple[str, Any]:
     except (SyntaxError, ValueError):
         pass
     return (key, value)
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=models.MODEL_CLASSES.keys())
@@ -40,7 +42,32 @@ class GenerationRequest(BaseModel):
 @app.post("/generate")
 def generate(request: GenerationRequest):
     return model.generate(
-        request.prompt, max_tokens=request.max_tokens, stop_at=request.stop_at
+        request.prompt,
+        max_tokens=request.max_tokens,
+        stop_at=request.stop_at,
+        **request.config,
+    )
+
+
+class ChatRequest(BaseModel):
+    instructions: str
+    message: str
+    max_tokens: int | None = None
+    stop_at: str | None = None
+    config: dict[str, Any] = {}
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    if not isinstance(model, models.ChatModel):
+        raise HTTPException(
+            status_code=400, detail=f"{model.__class__.__name__} is not a chat model"
+        )
+    return model.chat(
+        request.prompt,
+        max_tokens=request.max_tokens,
+        stop_at=request.stop_at,
+        **request.config,
     )
 
 
