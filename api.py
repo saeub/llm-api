@@ -11,7 +11,11 @@ import models
 
 def kwarg_eval(string: str) -> tuple[str, Any]:
     key, value = string.split("=")
-    return (key, literal_eval(value))
+    try:
+        value = literal_eval(value)
+    except (SyntaxError, ValueError):
+        pass
+    return (key, value)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=models.MODEL_CLASSES.keys())
