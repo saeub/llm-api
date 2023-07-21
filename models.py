@@ -26,6 +26,20 @@ class Model:
         raise NotImplementedError()
 
 
+class _ChatModel(Model):
+    def respond(
+        self,
+        instruction: str,
+        message: str,
+        **kwargs,
+    ) -> str:
+        prompt = self._build_prompt(instruction, message)
+        return self.generate(prompt, **kwargs)
+
+    def _build_prompt(self, instruction: str, message: str) -> str:
+        raise NotImplementedError()
+
+
 class _StopPhraseCriteria(StoppingCriteria):
     def __init__(self, stop_phrase: str, tokenizer: PreTrainedTokenizerBase):
         self.stop_phrase = stop_phrase
@@ -82,10 +96,8 @@ class GPT2(_TransformersModel):
 
 
 class Falcon(_TransformersModel):
-    def __init__(self, size: Literal["7b", "40b"], instruct: bool = False):
+    def __init__(self, size: Literal["7b", "40b"]):
         model_name = f"tiiuae/falcon-{size}"
-        if instruct:
-            model_name += "-instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -96,12 +108,26 @@ class Falcon(_TransformersModel):
         super().__init__(tokenizer, model)
 
 
+class FalconInstruct(_TransformersModel, _ChatModel):
+    def __init__(self, size: Literal["7b", "40b"]):
+        model_name = f"tiiuae/falcon-{size}-instruct"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+        )
+        super().__init__(tokenizer, model)
+
+    def _build_prompt(self, instruction: str, message: str) -> str:
+        # See https://huggingface.co/spaces/tiiuae/falcon-chat/blob/690a964f3c807fa1fc9acacef4f3d320fdbb6b0f/app.py#L41-L48
+        return f"{instruction}\nUser: {message}\nAssistant:"
+
+
 class Llama2(_TransformersModel):
-    def __init__(self, size: Literal["7b", "13b", "70b"], chat: bool = False):
-        model_name = f"meta-llama/Llama-2-{size}"
-        if chat:
-            model_name += "-chat"
-        model_name += "-hf"
+    def __init__(self, size: Literal["7b", "13b", "70b"]):
+        model_name = f"meta-llama/Llama-2-{size}-hf"
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=True)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -110,6 +136,25 @@ class Llama2(_TransformersModel):
             device_map="auto",
         )
         super().__init__(tokenizer, model)
+
+
+class Llama2Chat(_TransformersModel, _ChatModel):
+    def __init__(self, size: Literal["7b", "13b", "70b"]):
+        model_name = f"meta-llama/Llama-2-{size}-chat-hf"
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            use_auth_token=True,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
+        super().__init__(tokenizer, model)
+
+    def _build_prompt(self, instruction: str, message: str) -> str:
+        # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L44-L45
+        B_INST, E_INST = "[INST]", "[/INST]"
+        B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+        return f"{B_INST} {B_SYS}{instruction}{E_SYS}{message} {E_INST}"
 
 
 def _get_subclasses(cls):
