@@ -101,7 +101,7 @@ class Llama2(_TransformersModel):
         model_name = f"meta-llama/Llama-2-{size}-hf"
         if chat:
             model_name += "-chat"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=True)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             use_auth_token=True,
