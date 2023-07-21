@@ -98,9 +98,10 @@ class Falcon(_TransformersModel):
 
 class Llama2(_TransformersModel):
     def __init__(self, size: Literal["7b", "13b", "70b"], chat: bool = False):
-        model_name = f"meta-llama/Llama-2-{size}-hf"
+        model_name = f"meta-llama/Llama-2-{size}"
         if chat:
             model_name += "-chat"
+        model_name += "-hf"
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=True)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
