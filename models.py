@@ -123,4 +123,3 @@ MODEL_CLASSES = {
     for subclass in _get_subclasses(Model)
     if not subclass.__name__.startswith("_")
 }
-print(MODEL_CLASSES)

@@ -1,4 +1,5 @@
 import argparse
+import os
 from ast import literal_eval
 from typing import Any
 
@@ -11,8 +12,10 @@ import models
 parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=models.MODEL_CLASSES.keys())
 parser.add_argument("--kwargs", type=literal_eval, default={})
+parser.add_argument("--gpus", type=int, nargs="*", default=[])
 args = parser.parse_args()
 
+os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpus))
 
 model = models.MODEL_CLASSES[args.model_name](**args.kwargs)
 
