@@ -10,7 +10,7 @@ from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 class Model:
     def generate(
         self,
-        input_text: str,
+        prompt: str,
         max_tokens: int | None = None,
         stop_at: str | None = None,
         **kwargs,
@@ -19,7 +19,7 @@ class Model:
 
     def classify(
         self,
-        input_text: str,
+        prompt: str,
         labels: list[str],
         **kwargs,
     ) -> dict[str, float]:
@@ -45,7 +45,7 @@ class _TransformersModel(Model):
 
     def generate(
         self,
-        input_text: str,
+        prompt: str,
         max_tokens: int | None = None,
         stop_at: str | None = None,
         **kwargs,
@@ -59,7 +59,7 @@ class _TransformersModel(Model):
                 [_StopPhraseCriteria(stop_phrase=stop_at, tokenizer=self.tokenizer)]
             )
 
-        input_ids = self.tokenizer.encode(input_text, return_tensors="pt")
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
         output_ids = self.model.generate(
             input_ids,
             num_return_sequences=1,
