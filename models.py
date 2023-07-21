@@ -82,7 +82,7 @@ class GPT2(_TransformersModel):
 
 
 class Falcon(_TransformersModel):
-    def __init__(self, size: str = Literal["7b", "40b"], instruct: bool = False):
+    def __init__(self, size: Literal["7b", "40b"], instruct: bool = False):
         model_name = f"tiiuae/falcon-{size}"
         if instruct:
             model_name += "-instruct"
@@ -97,7 +97,7 @@ class Falcon(_TransformersModel):
 
 
 class Llama2(_TransformersModel):
-    def __init__(self, size: str = Literal["7b", "13b", "70b"], chat: bool = False):
+    def __init__(self, size: Literal["7b", "13b", "70b"], chat: bool = False):
         model_name = f"meta-llama/Llama-2-{size}-hf"
         if chat:
             model_name += "-chat"
