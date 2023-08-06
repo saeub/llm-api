@@ -23,6 +23,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=models.MODEL_CLASSES.keys())
 parser.add_argument("--kwargs", type=kwarg_eval, nargs="*", default=[])
 parser.add_argument("--gpus", type=int, nargs="*", default=[])
+parser.add_argument("--host", default="0.0.0.0")
+parser.add_argument("--port", type=int, default=8000)
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpus))
@@ -83,4 +85,4 @@ def classify(request: ClassificationRequest):
     return model.classify(request.prompt, request.labels)
 
 
-uvicorn.run(app)
+uvicorn.run(app, host=args.host, port=args.port)
