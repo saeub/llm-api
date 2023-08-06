@@ -64,7 +64,8 @@ def chat(request: ChatRequest):
             status_code=400, detail=f"{model.__class__.__name__} is not a chat model"
         )
     return model.chat(
-        request.prompt,
+        request.instructions,
+        request.message,
         max_tokens=request.max_tokens,
         stop_at=request.stop_at,
         **request.config,
