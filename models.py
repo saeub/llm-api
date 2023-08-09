@@ -85,7 +85,8 @@ class _TransformersModel(Model):
             stopping_criteria=stopping_criteria,
             **kwargs,
         )
-        return self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        output = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        return output.removeprefix(prompt).strip()
 
 
 class GPT2(_TransformersModel):
