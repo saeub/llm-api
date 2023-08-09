@@ -38,17 +38,27 @@ class GenerationRequest(BaseModel):
     prompt: str
     max_tokens: int | None = None
     stop_at: str | None = None
+    top_logprobs: int | None = None
+    logprobs_for_tokens: list[str] | None = None
     config: dict[str, Any] = {}
 
 
+class GenerationResponse(BaseModel):
+    output: str
+    logprobs: models.Logprobs | None = None
+
+
 @app.post("/generate")
-def generate(request: GenerationRequest):
-    return model.generate(
+def generate(request: GenerationRequest) -> GenerationResponse:
+    output, logprobs = model.generate(
         request.prompt,
         max_tokens=request.max_tokens,
         stop_at=request.stop_at,
+        top_logprobs=request.top_logprobs,
+        logprobs_for_tokens=request.logprobs_for_tokens,
         **request.config,
     )
+    return GenerationResponse(output=output, logprobs=logprobs)
 
 
 class ChatRequest(BaseModel):
@@ -60,18 +70,19 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest) -> GenerationResponse:
     if not isinstance(model, models.ChatModel):
         raise HTTPException(
             status_code=400, detail=f"{model.__class__.__name__} is not a chat model"
         )
-    return model.chat(
+    output, logprobs = model.chat(
         request.instructions,
         request.message,
         max_tokens=request.max_tokens,
         stop_at=request.stop_at,
         **request.config,
     )
+    return GenerationResponse(output=output, logprobs=logprobs)
 
 
 class ClassificationRequest(BaseModel):

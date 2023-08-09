@@ -7,14 +7,19 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 
+Logprobs = list[dict[str, float]]
+
+
 class Model:
     def generate(
         self,
         prompt: str,
         max_tokens: int | None = None,
         stop_at: str | None = None,
+        top_logprobs: int | None = None,
+        logprobs_for_tokens: list[str] | None = None,
         **kwargs,
-    ) -> str:
+    ) -> tuple[str, Logprobs | None]:
         raise NotImplementedError()
 
     def classify(
@@ -34,7 +39,7 @@ class ChatModel(Model):
         instructions: str,
         message: str,
         **kwargs,
-    ) -> str:
+    ) -> tuple[str, Logprobs | None]:
         prompt = self._build_prompt(instructions, message)
         if "stop_at" not in kwargs:
             kwargs["stop_at"] = self._end_of_response
@@ -60,14 +65,17 @@ class _TransformersModel(Model):
     def __init__(self, tokenizer: PreTrainedTokenizerBase, model: PreTrainedModel):
         self.tokenizer = tokenizer
         self.model = model
+        self._reverse_vocab = {v: k for k, v in tokenizer.get_vocab().items()}
 
     def generate(
         self,
         prompt: str,
         max_tokens: int | None = 100,
         stop_at: str | None = None,
+        top_logprobs: int | None = None,
+        logprobs_for_tokens: list[str] | None = None,
         **kwargs,
-    ) -> str:
+    ) -> tuple[str, Logprobs | None]:
         if max_tokens is None and stop_at is None:
             raise ValueError("Either max_tokens or stop_at must be specified")
 
@@ -78,15 +86,51 @@ class _TransformersModel(Model):
             )
 
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
-        output_ids = self.model.generate(
+        output = self.model.generate(
             input_ids,
             num_return_sequences=1,
             max_new_tokens=max_tokens,
             stopping_criteria=stopping_criteria,
+            return_dict_in_generate=True,
+            output_scores=True,
             **kwargs,
         )
-        output = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        return output.removeprefix(prompt).strip()
+        output_ids = output.sequences[0]
+        output_text = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+        output_text = output_text.removeprefix(prompt)
+
+        if logprobs_for_tokens is not None:
+            logprobs_for_token_ids = []
+            for token in logprobs_for_tokens:
+                token_ids = self.tokenizer.encode(token)
+                if len(token_ids) > 1:
+                    tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
+                    raise ValueError(f"{token!r} is not a single token ({tokens!r}))")
+                logprobs_for_token_ids.append(token_ids[0])
+            logprobs_for_tokens = [self._reverse_vocab[token_id] for token_id in logprobs_for_token_ids]
+
+        if top_logprobs is not None or logprobs_for_tokens is not None:
+            output_logprobs = []
+            for token_scores in output.scores:
+                token_logprobs = token_scores.log_softmax(dim=-1)
+                logprobs = {}
+                if top_logprobs is not None:
+                    top_token_logprobs, top_token_ids = token_logprobs.topk(top_logprobs, dim=-1)
+                    logprobs.update({
+                        self._reverse_vocab[token_id.item()]: score.item()
+                        for token_id, score in zip(top_token_ids[0], top_token_logprobs[0])
+                    })
+                if logprobs_for_tokens is not None:
+                    logprobs.update({
+                        token: token_logprobs[0, token_id].item()
+                        for token, token_id in zip(logprobs_for_tokens, logprobs_for_token_ids)
+                    })
+                output_logprobs.append(logprobs)
+
+        else:
+            output_logprobs = None
+
+        return output_text, output_logprobs
 
 
 class GPT2(_TransformersModel):
