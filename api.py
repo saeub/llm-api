@@ -66,6 +66,8 @@ class ChatRequest(BaseModel):
     message: str
     max_tokens: int | None = None
     stop_at: str | None = None
+    top_logprobs: int | None = None
+    logprobs_for_tokens: list[str] | None = None
     config: dict[str, Any] = {}
 
 
@@ -80,6 +82,8 @@ def chat(request: ChatRequest) -> GenerationResponse:
         request.message,
         max_tokens=request.max_tokens,
         stop_at=request.stop_at,
+        top_logprobs=request.top_logprobs,
+        logprobs_for_tokens=request.logprobs_for_tokens,
         **request.config,
     )
     return GenerationResponse(output=output, logprobs=logprobs)
