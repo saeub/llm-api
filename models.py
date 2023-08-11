@@ -116,7 +116,7 @@ class _TransformersModel(Model):
                 token_ids = self.tokenizer.encode(token, add_special_tokens=False)
                 if len(token_ids) > 1:
                     tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
-                    raise ValueError(f"{token!r} is not a single token ({tokens!r}))")
+                    raise ValueError(f"{token!r} is not a single token ({tokens!r})")
                 logprobs_for_token_ids.append(token_ids[0])
             logprobs_for_tokens = [
                 self._reverse_vocab[token_id] for token_id in logprobs_for_token_ids

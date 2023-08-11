@@ -50,14 +50,17 @@ class GenerationResponse(BaseModel):
 
 @app.post("/generate")
 def generate(request: GenerationRequest) -> GenerationResponse:
-    output, logprobs = model.generate(
-        request.prompt,
-        max_tokens=request.max_tokens,
-        stop_at=request.stop_at,
-        top_logprobs=request.top_logprobs,
-        logprobs_for_tokens=request.logprobs_for_tokens,
-        **request.config,
-    )
+    try:
+        output, logprobs = model.generate(
+            request.prompt,
+            max_tokens=request.max_tokens,
+            stop_at=request.stop_at,
+            top_logprobs=request.top_logprobs,
+            logprobs_for_tokens=request.logprobs_for_tokens,
+            **request.config,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return GenerationResponse(output=output, logprobs=logprobs)
 
 
