@@ -102,7 +102,7 @@ class _TransformersModel(Model):
         if logprobs_for_tokens is not None:
             logprobs_for_token_ids = []
             for token in logprobs_for_tokens:
-                token_ids = self.tokenizer.encode(token)
+                token_ids = self.tokenizer.encode(token, add_special_tokens=False)
                 if len(token_ids) > 1:
                     tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
                     raise ValueError(f"{token!r} is not a single token ({tokens!r}))")
