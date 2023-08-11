@@ -6,7 +6,6 @@ from transformers.generation import StoppingCriteria, StoppingCriteriaList
 from transformers.modeling_utils import PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
-
 Logprobs = list[dict[str, float]]
 
 
@@ -62,10 +61,22 @@ class _StopPhraseCriteria(StoppingCriteria):
 
 
 class _TransformersModel(Model):
-    def __init__(self, tokenizer: PreTrainedTokenizerBase, model: PreTrainedModel):
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        model: PreTrainedModel,
+        sp_whitespace: str | None,
+    ):
         self.tokenizer = tokenizer
         self.model = model
-        self._reverse_vocab = {v: k for k, v in tokenizer.get_vocab().items()}
+        if sp_whitespace is None:
+            restore_whitespace = lambda token: token
+        else:
+            restore_whitespace = lambda token: token.replace(sp_whitespace, " ")
+        self._reverse_vocab = {
+            token_id: restore_whitespace(token)
+            for token, token_id in tokenizer.get_vocab().items()
+        }
 
     def generate(
         self,
@@ -107,7 +118,9 @@ class _TransformersModel(Model):
                     tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
                     raise ValueError(f"{token!r} is not a single token ({tokens!r}))")
                 logprobs_for_token_ids.append(token_ids[0])
-            logprobs_for_tokens = [self._reverse_vocab[token_id] for token_id in logprobs_for_token_ids]
+            logprobs_for_tokens = [
+                self._reverse_vocab[token_id] for token_id in logprobs_for_token_ids
+            ]
 
         if top_logprobs is not None or logprobs_for_tokens is not None:
             output_logprobs = []
@@ -115,16 +128,26 @@ class _TransformersModel(Model):
                 token_logprobs = token_scores.log_softmax(dim=-1)
                 logprobs = {}
                 if top_logprobs is not None:
-                    top_token_logprobs, top_token_ids = token_logprobs.topk(top_logprobs, dim=-1)
-                    logprobs.update({
-                        self._reverse_vocab[token_id.item()]: score.item()
-                        for token_id, score in zip(top_token_ids[0], top_token_logprobs[0])
-                    })
+                    top_token_logprobs, top_token_ids = token_logprobs.topk(
+                        top_logprobs, dim=-1
+                    )
+                    logprobs.update(
+                        {
+                            self._reverse_vocab[token_id.item()]: score.item()
+                            for token_id, score in zip(
+                                top_token_ids[0], top_token_logprobs[0]
+                            )
+                        }
+                    )
                 if logprobs_for_tokens is not None:
-                    logprobs.update({
-                        token: token_logprobs[0, token_id].item()
-                        for token, token_id in zip(logprobs_for_tokens, logprobs_for_token_ids)
-                    })
+                    logprobs.update(
+                        {
+                            token: token_logprobs[0, token_id].item()
+                            for token, token_id in zip(
+                                logprobs_for_tokens, logprobs_for_token_ids
+                            )
+                        }
+                    )
                 output_logprobs.append(logprobs)
 
         else:
@@ -141,7 +164,7 @@ class GPT2(_TransformersModel):
             model_name,
             device_map="auto",
         )
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, "Ġ")
 
 
 class Falcon(_TransformersModel):
@@ -154,7 +177,7 @@ class Falcon(_TransformersModel):
             torch_dtype=torch.bfloat16,
             device_map="auto",
         )
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, "Ġ")
 
 
 class FalconInstruct(_TransformersModel, ChatModel):
@@ -169,7 +192,7 @@ class FalconInstruct(_TransformersModel, ChatModel):
             torch_dtype=torch.bfloat16,
             device_map="auto",
         )
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, "Ġ")
 
     def _build_prompt(self, instructions: str, message: str) -> str:
         # See https://huggingface.co/spaces/tiiuae/falcon-chat/blob/690a964f3c807fa1fc9acacef4f3d320fdbb6b0f/app.py#L41-L48
@@ -186,7 +209,7 @@ class Llama2(_TransformersModel):
             torch_dtype=torch.float16,
             device_map="auto",
         )
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, "▁")
 
 
 class Llama2Chat(_TransformersModel, ChatModel):
@@ -204,7 +227,7 @@ class Llama2Chat(_TransformersModel, ChatModel):
             torch_dtype=torch.float16,
             device_map="auto",
         )
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, "▁")
 
     def _build_prompt(self, instructions: str, message: str) -> str:
         # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L224-L269
