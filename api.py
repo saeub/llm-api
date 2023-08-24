@@ -1,7 +1,7 @@
 import argparse
 import os
 from ast import literal_eval
-from typing import Any
+from typing import Any, Sequence
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -65,8 +65,8 @@ def generate(request: GenerationRequest) -> GenerationResponse:
 
 
 class ChatRequest(BaseModel):
-    instructions: str
-    message: str
+    messages: Sequence[models.Message]
+    system_message: str | None = None
     max_tokens: int | None = None
     stop_at: str | None = None
     top_logprobs: int | None = None
@@ -80,15 +80,18 @@ def chat(request: ChatRequest) -> GenerationResponse:
         raise HTTPException(
             status_code=400, detail=f"{model.__class__.__name__} is not a chat model"
         )
-    output, logprobs = model.chat(
-        request.instructions,
-        request.message,
-        max_tokens=request.max_tokens,
-        stop_at=request.stop_at,
-        top_logprobs=request.top_logprobs,
-        logprobs_for_tokens=request.logprobs_for_tokens,
-        **request.config,
-    )
+    try:
+        output, logprobs = model.chat(
+            request.messages,
+            system_message=request.system_message,
+            max_tokens=request.max_tokens,
+            stop_at=request.stop_at,
+            top_logprobs=request.top_logprobs,
+            logprobs_for_tokens=request.logprobs_for_tokens,
+            **request.config,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return GenerationResponse(output=output, logprobs=logprobs)
 
 
