@@ -1,6 +1,7 @@
-from typing import Literal
+from typing import Literal, Sequence
 
 import torch
+from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.generation import StoppingCriteria, StoppingCriteriaList
 from transformers.modeling_utils import PreTrainedModel
@@ -30,21 +31,40 @@ class Model:
         raise NotImplementedError()
 
 
+class Message(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+    @classmethod
+    def user(cls, content: str) -> "Message":
+        return cls(role="user", content=content)
+
+    @classmethod
+    def assistant(cls, content: str) -> "Message":
+        return cls(role="assistant", content=content)
+
+
 class ChatModel(Model):
     _end_of_response: str | None = None
 
     def chat(
         self,
-        instructions: str,
-        message: str,
+        messages: Sequence[Message],
+        system_message: str | None = None,
         **kwargs,
     ) -> tuple[str, Logprobs | None]:
-        prompt = self._build_prompt(instructions, message)
+        assert all(message.role == "user" for message in messages[::2]) and all(
+            message.role == "assistant" for message in messages[1::2]
+        ), "Messages must alternate between user and assistant, starting with user"
+        assert messages[-1].role == "user", "Last message must be from user"
+        prompt = self._build_prompt(system_message, messages)
         if "stop_at" not in kwargs:
             kwargs["stop_at"] = self._end_of_response
         return self.generate(prompt, **kwargs)
 
-    def _build_prompt(self, instructions: str, message: str) -> str:
+    def _build_prompt(
+        self, system_message: str | None, messages: Sequence[Message]
+    ) -> str:
         raise NotImplementedError()
 
 
@@ -194,9 +214,24 @@ class FalconInstruct(_TransformersModel, ChatModel):
         )
         super().__init__(tokenizer, model, "Ġ")
 
-    def _build_prompt(self, instructions: str, message: str) -> str:
+    def _build_prompt(
+        self, system_message: str | None, messages: Sequence[Message]
+    ) -> str:
         # See https://huggingface.co/spaces/tiiuae/falcon-chat/blob/690a964f3c807fa1fc9acacef4f3d320fdbb6b0f/app.py#L41-L48
-        return f"{instructions}\nUser: {message}\nAssistant:"
+        prompt = ""
+        if system_message is not None:
+            prompt += system_message
+            prompt += "\n"
+        for message in messages:
+            if message.role == "user":
+                prompt += f"User: {message.content}"
+            elif message.role == "assistant":
+                prompt += f"Assistant: {message.content}"
+            else:
+                raise ValueError(f"Unknown role: {message.role!r}")
+            prompt += "\n"
+        prompt += "Assistant:"
+        return prompt
 
 
 class Llama2(_TransformersModel):
@@ -214,6 +249,7 @@ class Llama2(_TransformersModel):
 
 class Llama2Chat(_TransformersModel, ChatModel):
     # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L44-L45
+    BOS, EOS = "<s>", "</s>"
     B_INST, E_INST = "[INST]", "[/INST]"
     B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
     _end_of_response = B_INST
@@ -229,9 +265,21 @@ class Llama2Chat(_TransformersModel, ChatModel):
         )
         super().__init__(tokenizer, model, "▁")
 
-    def _build_prompt(self, instructions: str, message: str) -> str:
+    def _build_prompt(
+        self, system_message: str | None, messages: Sequence[Message]
+    ) -> str:
         # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L224-L269
-        return f"{self.B_INST} {self.B_SYS}{instructions}{self.E_SYS}{message} {self.E_INST}"
+        prompt = ""
+        for i, message in enumerate(messages):
+            if i == 0 and system_message is not None:
+                prompt += f"{self.B_INST} {self.B_SYS}{system_message}{self.E_SYS}{message.content} {self.E_INST}"
+            elif message.role == "user":
+                prompt += f"{self.B_INST} {message.content} {self.E_INST}"
+            elif message.role == "assistant":
+                prompt += f" {message.content}{self.EOS}{self.BOS}"
+            else:
+                raise ValueError(f"Unknown role: {message.role!r}")
+        return prompt
 
 
 def _get_subclasses(cls):
