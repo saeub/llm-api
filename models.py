@@ -6,6 +6,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.generation import StoppingCriteria, StoppingCriteriaList
 from transformers.modeling_utils import PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from peft import PeftModel, PeftConfig
 
 Logprobs = list[dict[str, float]]
 
@@ -247,6 +248,15 @@ class Llama2(_TransformersModel):
         super().__init__(tokenizer, model, "▁")
 
 
+class Llama2PEFT(Llama2):
+    def __init__(self, path: str):
+        config = PeftConfig.from_pretrained(path)
+        tokenizer = AutoTokenizer.from_pretrained(config.base_model_name_or_path)
+        model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path)
+        model = PeftModel.from_pretrained(model, path)
+        super(Llama2Chat, self).__init__(tokenizer, model, "▁")
+
+
 class Llama2Chat(_TransformersModel, ChatModel):
     # See https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/generation.py#L44-L45
     BOS, EOS = "<s>", "</s>"
@@ -280,6 +290,15 @@ class Llama2Chat(_TransformersModel, ChatModel):
             else:
                 raise ValueError(f"Unknown role: {message.role!r}")
         return prompt
+
+
+class Llama2ChatPEFT(Llama2Chat):
+    def __init__(self, path: str):
+        config = PeftConfig.from_pretrained(path)
+        tokenizer = AutoTokenizer.from_pretrained(config.base_model_name_or_path)
+        model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path)
+        model = PeftModel.from_pretrained(model, path)
+        super(Llama2Chat, self).__init__(tokenizer, model, "▁")
 
 
 def _get_subclasses(cls):
