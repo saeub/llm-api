@@ -119,7 +119,7 @@ class _TransformersModel(Model):
 
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
         output = self.model.generate(
-            input_ids,
+            input_ids=input_ids,
             num_return_sequences=1,
             max_new_tokens=max_tokens,
             stopping_criteria=stopping_criteria,
