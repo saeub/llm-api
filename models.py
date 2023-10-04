@@ -252,7 +252,12 @@ class Llama2PEFT(Llama2):
     def __init__(self, path: str):
         config = PeftConfig.from_pretrained(path)
         tokenizer = AutoTokenizer.from_pretrained(config.base_model_name_or_path)
-        model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            config.base_model_name_or_path,
+            use_auth_token=True,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
         model = PeftModel.from_pretrained(model, path)
         super(Llama2Chat, self).__init__(tokenizer, model, "▁")
 
@@ -296,7 +301,12 @@ class Llama2ChatPEFT(Llama2Chat):
     def __init__(self, path: str):
         config = PeftConfig.from_pretrained(path)
         tokenizer = AutoTokenizer.from_pretrained(config.base_model_name_or_path)
-        model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            config.base_model_name_or_path,
+            use_auth_token=True,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
         model = PeftModel.from_pretrained(model, path)
         super(Llama2Chat, self).__init__(tokenizer, model, "▁")
 
